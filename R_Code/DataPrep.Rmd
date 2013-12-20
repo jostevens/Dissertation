@@ -6,6 +6,7 @@ This script is developed to gatherer all of the data and prepare it for analysis
 There are a number of different pieces of data that will be need for the analysis, data on commutting patterns, geographic data, and migration data (so far). Since these data sets are publicly available the following code will download all of the data and organize it in a sqlite relational database. The database will then allow for the analysis to only pull the relevant data.
 
 The first data that will be processed an placed into the database will be the Longitudinal Economic-Housholds Dynamics (LEHD) dataset. This dataset has been collected by the U.S. census and comes with three primary types of data: Origin-Destination (OD), Residence Area Characteristics (RAC), and Worker Area Characteristics (WAC).
+
 The OD file contains information on the number of workers commuting from any census block to any other census block (a census block is the smallest publicly available geographic area provided by the census bureau). This data provides detailed information on the commuter flows for almost every state in the continental U.S.
 
 ```{r LEHDMung, echo=FALSE, message=FALSE, warning=FALSE, results='hide', cache=TRUE}
@@ -115,8 +116,7 @@ library("sqldf")
 
 ```
 
-
-
+Eventually I want to be able to map everything so I need to get the .shp files (or equivilent) to merge with the network data.
 
 ```{r CensusGeo}
   # 2000 Block Shape Files: ftp://ftp2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2000  -  The block level data is aggrgated to both the county and state level - states have a 2 digit code and counties have a five digit code - update to 2010
@@ -152,7 +152,7 @@ dbWriteTable(conn = db, name="cBlocks", value = blocks, row.name=FALSE)  # Write
 
 ```
 
-
+The IRS has data on migration from county to county based on changes in residence from year to year on tax forms. The data has an issue of only tracking the people who pay taxes (roughly on time), but should give a decent representation of how many people are moving from one place to another. 
 
 ```{r IRSmung, echo=False, message=False, warning=FALSE, results='hide', cache=TRUE}
 
@@ -189,17 +189,6 @@ GetIRSdata <- function(){
   }
   dbDisconnect(db)
 }
-
-
-```
-
-
-```{r networkAnalysis, echo=False, message=False, warning=FALSE, results='hide', cache=TRUE}
-
-library(statnet)
-library(igraph)
-
-
 
 
 ```
