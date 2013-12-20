@@ -1,0 +1,207 @@
+Dissertation Data Prep
+========================================================
+
+This script is developed to gatherer all of the data and prepare it for analysis, a process known as "mungging". 
+
+There are a number of different pieces of data that will be need for the analysis, data on commutting patterns, geographic data, and migration data (so far). Since these data sets are publicly available the following code will download all of the data and organize it in a sqlite relational database. The database will then allow for the analysis to only pull the relevant data.
+
+The first data that will be processed an placed into the database will be the Longitudinal Economic-Housholds Dynamics (LEHD) dataset. This dataset has been collected by the U.S. census and comes with three primary types of data: Origin-Destination (OD), Residence Area Characteristics (RAC), and Worker Area Characteristics (WAC).
+The OD file contains information on the number of workers commuting from any census block to any other census block (a census block is the smallest publicly available geographic area provided by the census bureau). This data provides detailed information on the commuter flows for almost every state in the continental U.S.
+
+```{r LEHDMung, echo=FALSE, message=FALSE, warning=FALSE, results='hide', cache=TRUE}
+    # Data Sources:
+      # LEHD : http://lehd.did.census.gov/onthemap/LODES7/
+
+    # I also renamed the shp files with postal codes instead of the 2 digit codes - nope
+
+macdb  <- paste(c(getwd(), "/testing"), collapse="")
+pcdb <- "C:/Users/School/Documents/DataSets/temp/disSQL"
+
+db_name <- pcdb
+
+  #Libraries
+library("plyr")
+library("foreign")
+library("sqldf")
+
+
+
+
+#Function to download compressed files from LEHD Website
+ GetLODESData <- function(){
+   db <- dbConnect(SQLite(), dbname=db_name) # Open the database
+
+# List of states to loop through
+   gshp <- c("ak", "ar","az", "al",  "ca", "co", "ct", "de","fl","ga", "hi", "ia", 
+             "id", "in","il", "ks", "ky", "la", "md", "me", "mi", "mn","mo", "ms", 
+             "mt", "nc", "nd", "ne", "nh","nj", "nm", "nv", "ny", "oh", "ok", "or", 
+             "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+#Starts in 2003:ar, nh, ms
+#starts in 2010: DC
+#no OD data:ma
+   
+   for(j in gshp){ #loop through states
+    state <- j
+    if (state == "ar" || state =="az" || state =="nh" || state =="ms"){ 
+      indx <- c("04", "05", "06", "07", "08", "09", "10", "11") } # Modify year index based on the states
+    else {
+      indx <- c("02","03","04", "05", "06", "07", "08", "09", "10", "11")} # for loop through years
+  
+    for (i in indx){ # begin loop through years
+      ns <- paste(c("http://lehd.ces.census.gov/data/lodes/LODES7/",state,
+                  "/od/", state, "_od_main_JT01_20",i,".csv.gz"), collapse = "") #get the appropriate web address
+      nplace <- paste(c("C:/Users/School/Documents/DataSets/temp/",
+                        i, state, ".csv.gz"), collapse = "") # Destination File
+     download.file(ns, destfile = nplace) # Download file
+      
+      open <- read.csv(gzfile(nplace, "r")) # Open connection to compressed file
+      dbtName <- paste(c(state,i), collapse="") # Name for table in the SQLite database
+      dbWriteTable(conn = db, name=dbtName, value = open, row.name=FALSE) # Write data from compressed file to database
+      unlink(nplace) # close connection to compressed file
+      
+                    }
+                  }
+   dbDisconnect(db) # Close the database connection
+    } 
+ 
+ # Close connection to database
+
+    #there is a tutorial on mapping this kind of data at http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
+  
+# Field Descriptions for WAC
+#####################  
+# Label Names
+# C000 total number of jobs
+# CA01 jobs for workers <=29years
+# CA02 jobs for workers 30-54years
+# CA03 jobs for workers >=55years
+ 
+# CE01 jobs with earnings <=1250/month
+# CE02 jobs with earnings 1250-3333/month
+# CE03 jobs with earnings >=3333/month
+#CNS01 Number of jobs in NAICS sector 11 (Agriculture, Forestry, Fishing and Hunting)
+#CNS02 Number of jobs in NAICS sector 21 (Mining, Quarrying, and Oil and Gas Extraction)
+#CNS03 Number of jobs in NAICS sector 22 (Utilities)
+#CNS04 Number of jobs in NAICS sector 23 (Construction)
+#CNS05 Number of jobs in NAICS sector 31-33 (Manufacturing)
+#CNS06 Number of jobs in NAICS sector 42 (Wholesale Trade)
+#CNS07 Number of jobs in NAICS sector 44-45 (Retail Trade)
+#CNS08 Number of jobs in NAICS sector 48-49 (Transportation and Warehousing)
+#CNS09 Number of jobs in NAICS sector 51 (Information)
+#CNS10 Number of jobs in NAICS sector 52 (Finance and Insurance)
+#CNS11 Number of jobs in NAICS sector 53 (Real Estate and Rental and Leasing)
+#CNS12 number of jobs in NAICS sector 54 (Professional, Scientific, and Technical Services)
+#CNS13 Number of jobs in NAICS sector 55 (Management of Companies and Enterprises)
+#CNS14 number of jobs in NAICS sector 56 (Administrative and Support and Waste Management and Remediation Services)
+#CNS15 Number of jobs in NAICS sector 61 (Educational Services)
+#CNS16 Number of jobs in NAICS sector 62 (Health Care and Social Assistance)
+#CNS17 Number of jobs in NAICS sector 71 (Arts, Entertainment, and Recreation)
+#CNS18 Number of jobs in NAICS sector 72 (Accommodation and Food Services)
+#CNS19 Number of jobs in NAICS sector 81 (Other Services [except Public Administration])
+#CNS20 Number of jobs in NAICS sector 92 (Public Administration)
+##
+# CR01 jobs for worker with race White Alone
+# CR02 jobs for worker with race black Alone
+# CR03 jobs for worker with race AIAN Alone
+# CR04 jobs for worker with race Asian Alone
+# CR05 jobs for worker with race 2+ Alone
+# CR06 jobs for worker with race Not Latino Alone
+# CR07 jobs for worker with race Latino Alone
+# 
+# CD01 jobs for workers with ed >HS
+# CD02 jobs for workers with ed =HS
+# CD03 jobs for workers with ed =SC/AS
+# CD04 jobs for workers with ed BS or higher
+
+```
+
+
+
+
+```{r CensusGeo}
+  # 2000 Block Shape Files: ftp://ftp2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2000  -  The block level data is aggrgated to both the county and state level - states have a 2 digit code and counties have a five digit code - update to 2010
+
+##This has already been run successfully - but needs to be updated to get the 2010 data
+
+# For mapping purposes I grabbed an ESRI gdb from http://www.census.gov/geo/maps-data/data/tiger-geodatabases.html
+
+  #List of states to loop through
+gshp1 <- c("ak", "al", "ar","az", "al",  "ca", "co", "ct", "de", "fl","ga", "hi", "ia", "id", "in","il", "ks", "ky", "la", "ma", "md", "me", "mi", "mn","mo", "ms", "mt", "nc", "nd", "nh", "ne","nj", "nm", "nv", "ny", "oh", "ok", "or", "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+
+
+createList <- function(gshp1){ # gshp = a list of state abreveiations corresponding to shape file names
+
+  for(j in gshp){ #loop through states
+    library(foreign)
+    state <- j
+    path01 <- c("C:/Users/School/Documents/DataSets/census/blocks/2000/tl_2010_", 
+                state, "_tabblock00.dbf")
+    pathg <- paste(path01, collapse = "")
+    geo <- read.dbf(pathg)
+    geo1 <- geo[,c("BLKIDFP00","INTPTLAT00","INTPTLON00")]
+    
+    write.table(geo1, "C:/Users/School/Documents/DataSets/census/blocks/2000/geoBlockList.csv", 
+                append=TRUE, col.names=FALSE, sep=",", quote=TRUE, row.names=FALSE)          
+  }
+}
+
+blocks <- read.csv("C:/Users/School/Documents/DataSets/census/blocks/2000/geoBlockList.csv", header=F) # this is a huge file containing lat longs for every US census block created with the create list function
+
+dbWriteTable(conn = db, name="cBlocks", value = blocks, row.name=FALSE)  # Write the census block lat longs to sqlite database
+
+
+```
+
+
+
+```{r IRSmung, echo=False, message=False, warning=FALSE, results='hide', cache=TRUE}
+
+GetIRSdata <- function(){
+  for( i in 4:9){
+    if(i < 9){
+      inflow <-  read.csv(paste(c("http://www.irs.gov/pub/irs-soi/countyinflow0",i, "0", i+1,".csv"),
+                      collapse = ""))
+      outflow <-  read.csv(paste(c("http://www.irs.gov/pub/irs-soi/countyoutflow0",i, "0", i+1,".csv"),
+                      collapse = ""))
+    } else {
+      inflow <-  read.csv(paste(c("http://www.irs.gov/pub/irs-soi/countyinflow0",i, i+1,".csv"),
+                      collapse = ""))
+      outflow <-  read.csv(paste(c("http://www.irs.gov/pub/irs-soi/countyoutflow0",i, i+1,".csv"),
+                      collapse = ""))
+      }
+      
+    if(i>=8){
+      county <- read.csv(paste(c("http://www.irs.gov/pub/irs-soi/0",i,"incicsv.csv"),
+                      collapse = ""))
+    } else {
+      county <- read.csv(paste(c("http://www.irs.gov/pub/irs-soi/countyincome0",i,".csv"),
+                      collapse = ""))
+    }
+    
+    dbtNamei <- paste(c("in0",i,"_0",i+1), collapse="")
+    dbtNameo <- paste(c("out0",i,"_0",i+1), collapse="")
+    dbtNamec <- paste(c("county0",i), collapse="")
+    db <- dbConnect(SQLite(), dbname=db_name)
+      dbWriteTable(conn = db, name=dbtNamei, value = inflow, row.name=FALSE)
+      dbWriteTable(conn = db, name=dbtNameo, value = outflow, row.name=FALSE)
+      dbWriteTable(conn = db, name=dbtNamec, value = county, row.name=FALSE)
+    
+  }
+  dbDisconnect(db)
+}
+
+
+```
+
+
+```{r networkAnalysis, echo=False, message=False, warning=FALSE, results='hide', cache=TRUE}
+
+library(statnet)
+library(igraph)
+
+
+
+
+```
+
+
