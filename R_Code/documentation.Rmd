@@ -1,0 +1,317 @@
+Dissertation Documentation
+========================================================
+
+My Dissertation is going to test some of the assupmtions and hypotheses of world/global cities theory.
+The assupmtion that I want to test deals with the unit of analysis. Most of the work done in this field deals with cities, but the deffinintion of cities is not well defined. There have been multiple units of analysis used including, municiple boundaries, metro areas, aggregated countys, etc.
+The issue of scale can be quite problematic. As geographers found out long ago, changing the spatial unit often dramatically changes the result. This problem is so pronounced that it has its own name, the modifiable areal unit problem or MAUP. According to some theorists there is no good solution to this problem. The first thing that I need to do is to figure out the appropriate unit of analysis.
+
+After the MAUP problem is dealt with the next order of business is to analyze the amount of spatial segregation that exists in the areas and determine how much of it can be explained by connections to the global or national urban hierarchies.
+
+
+```{r LEHDMung, echo=FALSE, message=FALSE, warning=FALSE, results='hide', cache=TRUE, eval=FALSE}
+    # Data Sources:
+      # LEHD : http://lehd.did.census.gov/onthemap/LODES7/
+
+
+macdb  <- paste(c(getwd(), "/testing"), collapse="")
+pcdb <- "C:/Users/School/Documents/DataSets/temp/disSQL.sqlite"
+
+db_name <- pcdb
+
+  #Libraries
+library("plyr")
+library("foreign")
+library("sqldf")
+
+#Functions to download compressed files from LEHD Website
+  #This grabs the worker area charateristics (wac)
+GetLODES_WAC_Data <- function(){
+  library(RPostgreSQL)
+  drv <- dbDriver("PostgreSQL") # Load Driver
+  db  <- dbConnect(drv, # Connect to database (previously setup with pgresAdmin)
+                   host="localhost",
+                   port="5432",
+                   dbname="gisd",
+                   user="postgres",
+                   password="000000")
+  # List of states to loop through
+  gshp <- c("ak", "ar","az", "al",  "ca", "co", "ct", "de","fl","ga", "hi", "ia", 
+            "id", "in","il", "ks", "ky", "la", "md", "me", "mi", "mn","mo", "ms", 
+            "mt", "nc", "nd", "ne", "nh","nj", "nm", "nv", "ny", "oh", "ok", "or", 
+            "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+  #Starts in 2003:ar, nh, ms
+  #starts in 2010: DC
+  #no OD data:ma
+  
+  for(j in gshp){ #loop through states
+    state <- j
+    if (state == "ar" || state =="az" || state =="nh" || state =="ms"){ 
+      indx <- c("04", "05", "06", "07", "08", "09", "10", "11") } # Modify year index based on the states
+    else {
+      indx <- c("02","03","04", "05", "06", "07", "08", "09", "10", "11")} # for loop through years
+    
+    for (i in indx){ # begin loop through years
+      ns <- paste(c("http://lehd.ces.census.gov/data/lodes/LODES7/",state,
+                    "/wac/", state, "_wac_S000_JT00_20",i,".csv.gz"), collapse = "") #get the appropriate web address
+      nplace <- paste(c("C:/Users/School/Downloads/temp/",
+                        i, state, ".csv.gz"), collapse = "") # Destination File
+      download.file(ns, destfile = nplace) # Download file
+      
+      open <- read.csv(gzfile(nplace, "r")) # Open connection to compressed file
+      dbtName <- paste(c(state,i,"wac"), collapse="") # Name for table in the SQLite database
+      dbWriteTable(conn = db, name=dbtName, value = open, row.name=FALSE) # Write data from compressed file to database
+      unlink(nplace) # close connection to compressed file
+      file.remove(nplace)
+    }
+  }
+  dbDisconnect(db) # Close connection
+  dbUnloadDriver(drv) # free the driver
+  remove(db)
+  remove(drv)
+}  
+  #This grabs the residential area charateristics (rac)
+ GetLODES_RAC_Data <- function(){
+     library(RPostgreSQL)
+  drv <- dbDriver("PostgreSQL") # Load Driver
+  db  <- dbConnect(drv, # Connect to database (previously setup with pgresAdmin)
+                   host="localhost",
+                   port="5432",
+                   dbname="gisd",
+                   user="postgres",
+                   password="000000") # Open the database
+
+# List of states to loop through
+   gshp <- c("ak", "ar","az", "al",  "ca", "co", "ct", "de","fl","ga", "hi", "ia", 
+             "id", "in","il", "ks", "ky", "la", "md", "me", "mi", "mn","mo", "ms", 
+             "mt", "nc", "nd", "ne", "nh","nj", "nm", "nv", "ny", "oh", "ok", "or", 
+             "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+#Starts in 2003:ar, nh, ms
+#starts in 2010: DC
+#no OD data:ma
+   
+   for(j in gshp){ #loop through states
+    state <- j
+    if (state == "ar" || state =="az" || state =="nh" || state =="ms"){ 
+      indx <- c("04", "05", "06", "07", "08", "09", "10", "11") } # Modify year index based on the states
+    else {
+      indx <- c("02","03","04", "05", "06", "07", "08", "09", "10", "11")} # for loop through years
+  
+    for (i in indx){ # begin loop through years
+      ns <- paste(c("http://lehd.ces.census.gov/data/lodes/LODES7/",state,
+                  "/rac/", state, "_rac_S000_JT00_20",i,".csv.gz"), collapse = "") #get the appropriate web address
+      nplace <- paste(c("C:/Users/School/Downloads/temp/",
+                        i, state, ".csv.gz"), collapse = "") # Destination File
+     download.file(ns, destfile = nplace) # Download file
+      
+      open <- read.csv(gzfile(nplace, "r")) # Open connection to compressed file
+      dbtName <- paste(c(state,i,"rac"), collapse="") # Name for table in the SQLite database
+      dbWriteTable(conn = db, name=dbtName, value = open, row.name=FALSE) # Write data from compressed file to database
+      unlink(nplace) # close connection to compressed file
+      file.remove(nplace)
+                    }
+                  }
+     dbDisconnect(db) # Close connection
+  dbUnloadDriver(drv) # free the driver
+  remove(db)
+  remove(drv)# Close the database connection
+    } 
+ 
+# Im not sure I'll be needing the OD data, but just in case...
+ GetLODES_ODData <- function(){
+     library(RPostgreSQL)
+  drv <- dbDriver("PostgreSQL") # Load Driver
+  db  <- dbConnect(drv, # Connect to database (previously setup with pgresAdmin)
+                   host="localhost",
+                   port="5432",
+                   dbname="gisd",
+                   user="postgres",
+                   password="000000") # Open the database
+
+# List of states to loop through
+   gshp <- c("ak", "ar","az", "al",  "ca", "co", "ct", "de","fl","ga", "hi", "ia", 
+             "id", "in","il", "ks", "ky", "la", "md", "me", "mi", "mn","mo", "ms", 
+             "mt", "nc", "nd", "ne", "nh","nj", "nm", "nv", "ny", "oh", "ok", "or", 
+             "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+#Starts in 2003:ar, nh, ms
+#starts in 2010: DC
+#no OD data:ma
+   
+   for(j in gshp){ #loop through states
+    state <- j
+    if (state == "ar" || state =="az" || state =="nh" || state =="ms"){ 
+      indx <- c("04", "05", "06", "07", "08", "09", "10", "11") } # Modify year index based on the states
+    else {
+      indx <- c("02","03","04", "05", "06", "07", "08", "09", "10", "11")} # for loop through years
+  
+    for (i in indx){ # begin loop through years
+      ns <- paste(c("http://lehd.ces.census.gov/data/lodes/LODES7/",state,
+                  "/od/", state, "_od_main_JT01_20",i,".csv.gz"), collapse = "") #get the appropriate web address
+      nplace <- paste(c("C:/Users/School/Downloads/temp/",
+                        i, state, ".csv.gz"), collapse = "") # Destination File
+     download.file(ns, destfile = nplace) # Download file
+      
+      open <- read.csv(gzfile(nplace, "r")) # Open connection to compressed file
+      dbtName <- paste(c(state,i), collapse="") # Name for table in the SQLite database
+      dbWriteTable(conn = db, name=dbtName, value = open, row.name=FALSE) # Write data from compressed file to database
+      unlink(nplace) # close connection to compressed file
+      file.remove(nplace)
+                    }
+                  }
+     dbDisconnect(db) # Close connection
+  dbUnloadDriver(drv) # free the driver
+  remove(db)
+  remove(drv) # Close the database connection
+    } 
+
+# Field Descriptions for WAC
+#####################  
+# Label Names
+# C000 total number of jobs
+# CA01 jobs for workers <=29years
+# CA02 jobs for workers 30-54years
+# CA03 jobs for workers >=55years
+ 
+# CE01 jobs with earnings <=1250/month
+# CE02 jobs with earnings 1250-3333/month
+# CE03 jobs with earnings >=3333/month
+#CNS01 Number of jobs in NAICS sector 11 (Agriculture, Forestry, Fishing and Hunting)
+#CNS02 Number of jobs in NAICS sector 21 (Mining, Quarrying, and Oil and Gas Extraction)
+#CNS03 Number of jobs in NAICS sector 22 (Utilities)
+#CNS04 Number of jobs in NAICS sector 23 (Construction)
+#CNS05 Number of jobs in NAICS sector 31-33 (Manufacturing)
+#CNS06 Number of jobs in NAICS sector 42 (Wholesale Trade)
+#CNS07 Number of jobs in NAICS sector 44-45 (Retail Trade)
+#CNS08 Number of jobs in NAICS sector 48-49 (Transportation and Warehousing)
+#CNS09 Number of jobs in NAICS sector 51 (Information)
+#CNS10 Number of jobs in NAICS sector 52 (Finance and Insurance)
+#CNS11 Number of jobs in NAICS sector 53 (Real Estate and Rental and Leasing)
+#CNS12 number of jobs in NAICS sector 54 (Professional, Scientific, and Technical Services)
+#CNS13 Number of jobs in NAICS sector 55 (Management of Companies and Enterprises)
+#CNS14 number of jobs in NAICS sector 56 (Administrative and Support and Waste Management and Remediation Services)
+#CNS15 Number of jobs in NAICS sector 61 (Educational Services)
+#CNS16 Number of jobs in NAICS sector 62 (Health Care and Social Assistance)
+#CNS17 Number of jobs in NAICS sector 71 (Arts, Entertainment, and Recreation)
+#CNS18 Number of jobs in NAICS sector 72 (Accommodation and Food Services)
+#CNS19 Number of jobs in NAICS sector 81 (Other Services [except Public Administration])
+#CNS20 Number of jobs in NAICS sector 92 (Public Administration)
+##
+# CR01 jobs for worker with race White Alone
+# CR02 jobs for worker with race black Alone
+# CR03 jobs for worker with race AIAN Alone
+# CR04 jobs for worker with race Asian Alone
+# CR05 jobs for worker with race 2+ Alone
+# CR06 jobs for worker with race Not Latino Alone
+# CR07 jobs for worker with race Latino Alone
+# 
+# CD01 jobs for workers with ed >HS
+# CD02 jobs for workers with ed =HS
+# CD03 jobs for workers with ed =SC/AS
+# CD04 jobs for workers with ed BS or higher
+#####
+
+```
+
+For the U.S. Airline data there is a freely available 10% origin and destination sample of all flights with an Origin or Destination in the U.S.. It can be accessed [here](http://www.transtats.bts.gov/DL_SelectFields.asp?Table_ID=289&DB_Short_Name=Origin%20and%20Destination%20Survey), and Neal (citation) has created a nice writeup of the data and created a stata program to use this data to create a network object. The problem is that the BTS interface only allows for downloading one quarter of data at a time (ie 2013 Q1). Since I need a bit more data than that I found that the following command will download a years worth of data if run through the java script console in the chrome or firefox browser:
+
+```
+document.form1.sqlstr.value = 
+" SELECT ITIN_ID, MKT_ID, SEQ_NUM, ORIGIN, DEST, YEAR, QUARTER FROM T_DB1B_COUPON WHERE YEAR=2008"
+
+document.form1.submit()
+```
+
+This code runs the javascript function which passes an SQL string to the government's database.
+I did try and get all of the data from 2000 - 2010, but the resulting file was too large. Instead, to avoid over-burdening the server, I iterated years by hand.
+
+The above code will get one of two files that are needed to create the network object, the other requires different fields and a different database name:
+
+```
+document.form1.sqlstr.value = " SELECT ITIN_ID, PASSENGER, ITIN_FARE, ROUNDTRIP, YEAR, QUARTER FROM T_DB1B_TICKET WHERE YEAR=2008"
+
+document.form1.submit()
+```
+
+The files will be downloaded as zipped csvs. The uncompressed file sizes range from 15Mb to 1.7Gb. I manually renamed the files with the year and the type of file; 'c' for the coupon data and 't' for the ticket data, followed by the year - 'c2001'.
+
+Once the files were renamed I used the following code to import them into a Postgres database which I had previously set up to hold my geographic data. The code reads in the list of csv files, and loops through the list createing a new table and schema, then copying the data from the csv files into the database. Then there are a couple of lines disconnect the r session from the database and close the drivers. The next section uses dplyr to churn through all of that data and give a compressed file with the origin and destination airport as well as the total number of trips and passengers.
+
+```{r Airnet, echo=TRUE, message=FALSE, warning=FALSE, results='hide', cache=TRUE, eval=FALSE}
+library(RPostgreSQL)
+
+drv <- dbDriver("PostgreSQL") # Load Driver
+con  <- dbConnect(drv, # Connect to database (previously setup with pgresAdmin)
+                  host="localhost",
+                  port="5432",
+                  dbname="gisd",
+                  user="postgres",
+                  password="000000")
+
+# Get the file location and names of the csv files
+loc <- "C:/Users/School/Downloads/FlightData/unzip/"
+fileLoc <- as.list(list.files(loc))
+fout <- lapply(fileLoc, substr,1,5)
+for(i in fout){
+  
+  # If you don't want to rename the file you can open first file in list and read the first line to figure out what type it is:
+  
+#   nplace <- paste(c(loc, i), collapse="")
+#   o <- read.csv(nplace, Header=TRUE, nrow = 1)
+#   if("PASSENGER" %in% names(o)){
+#     j <- paste(c("t", o$YEAR, ".csv"), collapse="")
+#   } else {
+#     i <- paste(c("c", o$YEAR), collapse="")
+#   }
+  
+  
+  
+  if(substr(i,1,1) == "c"){ # Get the proper fields for the different data sets
+    fields <- "ITIN_ID INTEGER, MKT_ID INTEGER, SEQ_NUM INTEGER, ORIGIN INTEGER, DEST INTEGER, YEAR INTEGER, QUARTER INTEGER, V8 VARCHAR" # Need the stupid V8 because the data dump brings in an extra empty field
+   } else {
+    fields <- "ITIN_ID INTEGER, PASSENGER INTEGER, ITIN_FARE INTEGER, ROUNDTRIP INTEGER, YEAR INTEGER, QUARTER INTEGER, V8 VARCHAR"
+   }
+  fout[[1]] <- copy_to(db, 
+                       read.csv(paste(c(loc,i),collapse=""),
+                                header= TRUE), 
+                       temporary = FALSE,
+                       indexes = list(fields))
+  
+  ct <- paste(c("CREATE TABLE ", substr(i,1,5), " (", fields, ")"), collapse="")
+  
+
+
+}
+dbDisconnect(con) # Close connection
+dbUnloadDriver(drv) # free the driver
+
+library(dplyr) # Load Library
+
+# Connect to database and read tables
+db <- src_postgres(host="localhost",
+                   port="5432",
+                   dbname="gisd",
+                   user="postgres",
+                   password="000000")
+c00 <- tbl(db, "c2010")
+t00 <- tbl(db, "t2010")
+
+# Set up query
+d01 <- inner_join(c00, t00, by = "ITIN_ID")%>%
+  select(ITIN_ID, ROUNDTRIP, PASSENGERS, ITIN_FARE, MKT_ID, SEQ_NUM, ORIGIN, DEST, YEAR.x, QUARTER.x)%>%
+  group_by(ITIN_ID)%>%
+  filter(SEQ_NUM == min(SEQ_NUM)| SEQ_NUM == max(SEQ_NUM))%>%
+  arrange(ITIN_ID)
+
+d01 <- (compute(d01)) # Create temporary table in database
+
+# Query to create network object data
+d02 <- group_by(d01, ORIGIN, DEST)%>%
+  summarise(trips = n(),
+            pass = sum(PASSENGERS)/2)%>%
+  arrange(trips)
+
+d02 <- collect(d02) # Generate the dataframe
+```
+
+
+
+
