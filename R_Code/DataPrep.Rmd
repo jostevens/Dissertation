@@ -13,15 +13,14 @@ The OD file contains information on the number of workers commuting from any cen
     # Data Sources:
       # LEHD : http://lehd.did.census.gov/onthemap/LODES7/
 
-    # I also renamed the shp files with postal codes instead of the 2 digit codes - nope
 
 macdb  <- paste(c(getwd(), "/testing"), collapse="")
-pcdb <- "C:/Users/School/Documents/DataSets/temp/disSQL"
+pcdb <- "C:/Users/School/Documents/DataSets/temp/disSQL.sqlite"
 
 db_name <- pcdb
 
   #Libraries
-library("plyr")
+library("dplyr")
 library("foreign")
 library("sqldf")
 
@@ -29,7 +28,88 @@ library("sqldf")
 
 
 #Function to download compressed files from LEHD Website
- GetLODESData <- function(){
+ GetLODES_WAC_Data <- function(){
+  # db <- dbConnect(SQLite(), dbname=db_name) # Open the database
+   db  <- dbConnect(drv, # Connect to database (previously setup with pgresAdmin)
+                  host="localhost",
+                  port="5432",
+                  dbname="gisd",
+                  user="postgres",
+                  password="000000")
+# List of states to loop through
+   gshp <- c("ak", "ar","az", "al",  "ca", "co", "ct", "de","fl","ga", "hi", "ia", 
+             "id", "in","il", "ks", "ky", "la", "md", "me", "mi", "mn","mo", "ms", 
+             "mt", "nc", "nd", "ne", "nh","nj", "nm", "nv", "ny", "oh", "ok", "or", 
+             "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+#Starts in 2003:ar, nh, ms
+#starts in 2010: DC
+#no OD data:ma
+   
+   for(j in gshp){ #loop through states
+    state <- j
+    if (state == "ar" || state =="az" || state =="nh" || state =="ms"){ 
+      indx <- c("04", "05", "06", "07", "08", "09", "10", "11") } # Modify year index based on the states
+    else {
+      indx <- c("02","03","04", "05", "06", "07", "08", "09", "10", "11")} # for loop through years
+  
+    for (i in indx){ # begin loop through years
+      ns <- paste(c("http://lehd.ces.census.gov/data/lodes/LODES7/",state,
+                  "/wac/", state, "_wac_S000_JT00_20",i,".csv.gz"), collapse = "") #get the appropriate web address
+      nplace <- paste(c("C:/Users/School/Documents/DataSets/temp/",
+                        i, state, ".csv.gz"), collapse = "") # Destination File
+     download.file(ns, destfile = nplace) # Download file
+      
+      open <- read.csv(gzfile(nplace, "r")) # Open connection to compressed file
+      dbtName <- paste(c(state,i,"wac"), collapse="") # Name for table in the SQLite database
+      dbWriteTable(conn = db, name=dbtName, value = open, row.name=FALSE) # Write data from compressed file to database
+      unlink(nplace) # close connection to compressed file
+      file.remove(nplace)
+                    }
+                  }
+   dbDisconnect(db) # Close the database connection
+    } 
+ 
+ # Close connection to database
+
+    #there is a tutorial on mapping this kind of data at http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
+ GetLODES_RAC_Data <- function(){
+   db <- dbConnect(SQLite(), dbname=db_name) # Open the database
+
+# List of states to loop through
+   gshp <- c("ak", "ar","az", "al",  "ca", "co", "ct", "de","fl","ga", "hi", "ia", 
+             "id", "in","il", "ks", "ky", "la", "md", "me", "mi", "mn","mo", "ms", 
+             "mt", "nc", "nd", "ne", "nh","nj", "nm", "nv", "ny", "oh", "ok", "or", 
+             "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+#Starts in 2003:ar, nh, ms
+#starts in 2010: DC
+#no OD data:ma
+   
+   for(j in gshp){ #loop through states
+    state <- j
+    if (state == "ar" || state =="az" || state =="nh" || state =="ms"){ 
+      indx <- c("04", "05", "06", "07", "08", "09", "10", "11") } # Modify year index based on the states
+    else {
+      indx <- c("02","03","04", "05", "06", "07", "08", "09", "10", "11")} # for loop through years
+  
+    for (i in indx){ # begin loop through years
+      ns <- paste(c("http://lehd.ces.census.gov/data/lodes/LODES7/",state,
+                  "/rac/", state, "_rac_S000_JT00_20",i,".csv.gz"), collapse = "") #get the appropriate web address
+      nplace <- paste(c("C:/Users/School/Documents/DataSets/temp/",
+                        i, state, ".csv.gz"), collapse = "") # Destination File
+     download.file(ns, destfile = nplace) # Download file
+      
+      open <- read.csv(gzfile(nplace, "r")) # Open connection to compressed file
+      dbtName <- paste(c(state,i,"rac"), collapse="") # Name for table in the SQLite database
+      dbWriteTable(conn = db, name=dbtName, value = open, row.name=FALSE) # Write data from compressed file to database
+      unlink(nplace) # close connection to compressed file
+      
+                    }
+                  }
+   dbDisconnect(db) # Close the database connection
+    } 
+ 
+
+ GetLODES_ODData <- function(){
    db <- dbConnect(SQLite(), dbname=db_name) # Open the database
 
 # List of states to loop through
@@ -59,16 +139,12 @@ library("sqldf")
       dbtName <- paste(c(state,i), collapse="") # Name for table in the SQLite database
       dbWriteTable(conn = db, name=dbtName, value = open, row.name=FALSE) # Write data from compressed file to database
       unlink(nplace) # close connection to compressed file
-      
+      file.remove(nplace) # Delete ziped file
                     }
                   }
    dbDisconnect(db) # Close the database connection
     } 
- 
- # Close connection to database
 
-    #there is a tutorial on mapping this kind of data at http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
-  
 # Field Descriptions for WAC
 #####################  
 # Label Names
@@ -115,6 +191,123 @@ library("sqldf")
 # CD04 jobs for workers with ed BS or higher
 
 ```
+
+```{r summarizeLODES}
+
+db <- dbConnect(SQLite(), dbname=db_name) # Open the database
+
+# Functions to combine data across years
+      long <- function(i, type="wac", data="C000"){
+        
+        paste(c("SELECT 
+                a.w_geocode, b.",data, " AS t2010, b.",data, " AS t2009, c.",data, " AS t2008, d.",data, " AS
+                t2007, e.",data, " AS t2006, f.",data, " AS t2005, g.",data, " AS t2004, h.",data, " AS t2003,
+                i.",data, " AS t2002 
+                FROM ", 
+                j, "10", type, " AS a
+                INNER JOIN ", 
+                j, "09", type, " AS b
+                ON 
+                a.w_geocode=b.w_geocode
+                INNER JOIN ", 
+                j, "08", type, " AS c 
+                ON 
+                a.w_geocode=c.w_geocode
+                INNER JOIN ",
+                j, "07", type, " AS d 
+                ON 
+                a.w_geocode=d.w_geocode
+                INNER JOIN ",
+                j, "06", type, " AS e 
+                ON 
+                a.w_geocode=e.w_geocode
+                INNER JOIN ", 
+                j, "05", type, " AS f 
+                ON 
+                a.w_geocode=f.w_geocode
+                INNER JOIN ",
+                j, "04", type, " AS g 
+                ON 
+                a.w_geocode=g.w_geocode
+                INNER JOIN ",
+                j, "03", type, " AS h 
+                ON 
+                a.w_geocode=h.w_geocode
+                INNER JOIN ",
+                j, "02", type, " AS i 
+                ON 
+                a.w_geocode=i.w_geocode" ), collapse = "") #join data across the years
+        }  
+
+
+      short <- function(i, type="wac", data="C000"){
+        
+        paste(c("SELECT 
+                a.w_geocode, b.",data, " AS tjob10, b.",data, " AS tjob09, c.",data, " AS tjob08, d.",data, " AS
+                tjob07, e.",data, " AS tjob06, f.",data, " AS tjob05, g.",data, " AS tjob04 
+                FROM ", 
+                j, "10", type, " AS a
+                INNER JOIN ", 
+                j, "09", type, " AS b
+                ON 
+                a.w_geocode=b.w_geocode
+                INNER JOIN ", 
+                j, "08", type, " AS c 
+                ON 
+                a.w_geocode=c.w_geocode
+                INNER JOIN ",
+                j, "07", type, " AS d 
+                ON 
+                a.w_geocode=d.w_geocode
+                INNER JOIN ",
+                j, "06", type, " AS e 
+                ON 
+                a.w_geocode=e.w_geocode
+                INNER JOIN ", 
+                j, "05", type, " AS f 
+                ON 
+                a.w_geocode=f.w_geocode
+                INNER JOIN ",
+                j, "04", type, " AS g 
+                ON 
+                a.w_geocode=g.w_geocode" ), collapse = "")
+        }
+
+# List of states to loop through
+   gshp <- c("ak", "ar","az", "al",  "ca", "co", "ct", "de","fl","ga", "hi", "ia", 
+             "id", "in","il", "ks", "ky", "la", "md", "me", "mi", "mn","mo", "ms", 
+             "mt", "nc", "nd", "ne", "nh","nj", "nm", "nv", "ny", "oh", "ok", "or", 
+             "pa", "ri", "sd", "tn", "tx", "ut","va", "vt", "wa", "wi", "wv", "wy")
+#Starts in 2003:ar, nh, ms
+#starts in 2010: DC
+#no OD data:ma
+   
+   for(j in gshp){ #loop through states
+    state <- j
+    if (state == "ar" || state =="az" || state =="nh" || state =="ms"){ 
+      d01 <- short(j, "wac") } # Modify year index based on the states
+    else { 
+      d01 <- long(j, "wac")
+      } # for loop through years
+  
+        
+
+  
+      jt <- dbGetQuery(db, d01)
+      return(jt)
+    }
+
+jt <- dbGetQuery(db, long("ak"))
+t5 <- reshape(jt, 
+              varying = names(jt[,-1]), 
+              v.names = "Jobs", 
+              timevar="Year", 
+              times=names(jt[,-1]),
+              direction= "long")
+
+```
+
+FIPS numbers contain the following information:  15-character code that is the concatenation of fields consisting of the 2-character state FIPS code, the 3-character county FIPS code, the 6-character census tract code, and the 4-character tabulation block code.
 
 Eventually I want to be able to map everything so I need to get the .shp files (or equivilent) to merge with the network data.
 
@@ -193,4 +386,34 @@ GetIRSdata <- function(){
 
 ```
 
+```{r Airnet}
+library(dplyr)
+db <- src_postgres(host="localhost",
+                   port="5432",
+                   dbname="gisd",
+                   user="postgres",
+                   password="000000")
+c00 <- tbl(db, "c2010")
+t00 <- tbl(db, "t2010")
+
+d01 <- inner_join(c00, t00, by = "ITIN_ID")%>%
+  select(ITIN_ID, ROUNDTRIP, PASSENGERS, ITIN_FARE, MKT_ID, SEQ_NUM, ORIGIN, DEST, YEAR.x, QUARTER.x)%>%
+  group_by(ITIN_ID)%>%
+  filter(SEQ_NUM == min(SEQ_NUM)| SEQ_NUM == max(SEQ_NUM))%>%
+  arrange(ITIN_ID)
+d01 <- (compute(d01))
+d02 <- group_by(d01, ORIGIN, DEST)%>%
+  summarise(trips = n(),
+            pass = sum(PASSENGERS)/2)%>%
+  arrange(trips)
+
+d02 <- collect(d02)
+
+
+
+
+
+
+
+```
 
