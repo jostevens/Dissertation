@@ -164,7 +164,7 @@ GetLODES_WAC_Data <- function(){
     } 
 
 # Field Descriptions for WAC
-#####################  
+ 
 # Label Names
 # C000 total number of jobs
 # CA01 jobs for workers <=29years
@@ -207,9 +207,106 @@ GetLODES_WAC_Data <- function(){
 # CD02 jobs for workers with ed =HS
 # CD03 jobs for workers with ed =SC/AS
 # CD04 jobs for workers with ed BS or higher
-#####
+```
+
+Now that we have the LEHD data in the database we need to combine it so we can analyze it. What we need is the data in a single file instead of separate files for each year. We also need to aggregate it by metroplitan and megaregional areas.
+
+```{r LEHDagg, echo=FALSE, message=FALSE, warning=FALSE, results='hide', cache=TRUE, eval=FALSE}
+
+library(dplyr)
+
+#Create sql string for data from 2002-2010 and join to file indicating inclusion in metro or megaregional areas.
+SQLlong <- function(j, type="wac", data="C000"){
+  
+  paste(c('SELECT 
+          a.w_geocode, a."',data, '" AS t2010, b."',data, '" AS t2009, c."',data, '" AS t2008, d."',data, '" AS
+          t2007, e."',data, '" AS t2006, f."',data, '" AS t2005, g."',data, '" AS t2004, h."',data, '" AS t2003,
+          i."',data, '" AS t2002,  
+          co.fipsnum, co.metro, co.micro, co.mega
+          FROM ', 
+          j, '10', type, ' AS a
+          INNER JOIN ', 
+          j, '09', type, ' AS b
+          ON 
+          a.w_geocode=b.w_geocode
+          INNER JOIN ', 
+          j, '08', type, ' AS c 
+          ON 
+          a.w_geocode=c.w_geocode
+          INNER JOIN ',
+          j, '07', type, ' AS d 
+          ON 
+          a.w_geocode=d.w_geocode
+          INNER JOIN ',
+          j, '06', type, ' AS e 
+          ON 
+          a.w_geocode=e.w_geocode
+          INNER JOIN ', 
+          j, '05', type, ' AS f 
+          ON 
+          a.w_geocode=f.w_geocode
+          INNER JOIN ',
+          j, '04', type, ' AS g 
+          ON 
+          a.w_geocode=g.w_geocode
+          INNER JOIN ',
+          j, '03', type, ' AS h 
+          ON 
+          a.w_geocode=h.w_geocode
+          INNER JOIN ',
+          j, '02', type, ' AS i 
+          ON 
+          a.w_geocode=i.w_geocode
+          INNER JOIN c2010county AS co
+          ON cast(SUBSTRING(cast(a.w_geocode as varchar),1,5) as Numeric)=co.fipsnum' ), collapse = '') #join data across the years
+}  
+
+#Create sql string for data from 2004-2010
+SQLshort <- function(j, type="wac", data="C000"){
+  
+  paste(c('SELECT 
+                a.w_geocode, a."',data, '" AS tjob10, b."',data, '" AS tjob09, c."',data, '" AS tjob08, d."',data, '" AS
+                tjob07, e."',data, '" AS tjob06, f."',data, '" AS tjob05, g."',data, '" AS tjob04,  
+          co.fipsnum, co.metro, co.micro, co.mega 
+                FROM ', 
+          j, '10', type, ' AS a
+                INNER JOIN ', 
+          j, '09', type, ' AS b
+                ON 
+                a.w_geocode=b.w_geocode
+                INNER JOIN ', 
+          j, '08', type, ' AS c 
+                ON 
+                a.w_geocode=c.w_geocode
+                INNER JOIN ',
+          j, '07', type, ' AS d 
+                ON 
+                a.w_geocode=d.w_geocode
+                INNER JOIN ',
+          j, '06', type, ' AS e 
+                ON 
+                a.w_geocode=e.w_geocode
+                INNER JOIN ', 
+          j, '05', type, ' AS f 
+                ON 
+                a.w_geocode=f.w_geocode
+                INNER JOIN ',
+          j, '04', type, ' AS g 
+                ON 
+                a.w_geocode=g.w_geocode
+          INNER JOIN c2010county AS co
+          ON cast(SUBSTRING(cast(a.w_geocode as varchar),1,5) as Numeric)=co.fipsnum' ), collapse = '')
+}
+
+#Stage the data
+t01 <- tbl(db, sql(SQLlong("ut", "wac", "C000")))
+  
+
+
 
 ```
+
+
 
 For the U.S. Airline data there is a freely available 10% origin and destination sample of all flights with an Origin or Destination in the U.S.. It can be accessed [here](http://www.transtats.bts.gov/DL_SelectFields.asp?Table_ID=289&DB_Short_Name=Origin%20and%20Destination%20Survey), and Neal (citation) has created a nice writeup of the data and created a stata program to use this data to create a network object. The problem is that the BTS interface only allows for downloading one quarter of data at a time (ie 2013 Q1). Since I need a bit more data than that I found that the following command will download a years worth of data if run through the java script console in the chrome or firefox browser:
 
@@ -291,25 +388,98 @@ db <- src_postgres(host="localhost",
                    dbname="gisd",
                    user="postgres",
                    password="000000")
-c00 <- tbl(db, "c2010")
-t00 <- tbl(db, "t2010")
 
-# Set up query
-d01 <- inner_join(c00, t00, by = "ITIN_ID")%>%
-  select(ITIN_ID, ROUNDTRIP, PASSENGERS, ITIN_FARE, MKT_ID, SEQ_NUM, ORIGIN, DEST, YEAR.x, QUARTER.x)%>%
-  group_by(ITIN_ID)%>%
-  filter(SEQ_NUM == min(SEQ_NUM)| SEQ_NUM == max(SEQ_NUM))%>%
-  arrange(ITIN_ID)
+getAirData <- function(year){
+  c00 <- tbl(db, paste(c("c", year), collapse=""))
+  t00 <- tbl(db, paste(c("t", year), collapse=""))
+  
+  # Set up query
+  d01 <- inner_join(c00, t00, by = "ITIN_ID")%>%
+    select(ITIN_ID, ROUNDTRIP, PASSENGERS, ITIN_FARE, MKT_ID, SEQ_NUM, ORIGIN, DEST, YEAR.x, QUARTER.x)%>%
+    group_by(ITIN_ID)%>%
+    filter(SEQ_NUM == min(SEQ_NUM)| SEQ_NUM == max(SEQ_NUM))%>%
+    arrange(ITIN_ID)
+  
+  d01 <- (compute(d01)) # Create temporary table in database
+  
+  # Query to create network object data
+  d02 <- group_by(d01, ORIGIN, DEST)%>%
+    summarise(trips = n(),
+              pass = sum(PASSENGERS)/2)%>%
+    arrange(trips)
+  
+  return(collect(d02)) # Generate the dataframe
+  }
 
-d01 <- (compute(d01)) # Create temporary table in database
 
-# Query to create network object data
-d02 <- group_by(d01, ORIGIN, DEST)%>%
-  summarise(trips = n(),
-            pass = sum(PASSENGERS)/2)%>%
-  arrange(trips)
 
-d02 <- collect(d02) # Generate the dataframe
+```
+
+Once the data has been collected from the database the next step is to turn it into a network or graph. In network form we will be able to generate measures of central tendency graph style. The measures that we are interested in are listed below:
+
+* Egenvector Centrality
+* Betweenness
+* In-degree
+* Out-degree
+* Closeness
+
+### Betweenness
+Betweenness is a measure representing how a node/airport acts as a broker to other airports
+
+```{r network, echo=TRUE, message=FALSE, warning=FALSE, results='hide', cache=TRUE, eval=FALSE}
+
+library(igraph)
+NetCentrality <- function(d){
+  g02 <- graph.edgelist(as.matrix(d[,1:2]), directed=TRUE)
+  E(g02)$weight <- d[,3]
+  ec <- evcent(g02, directed=TRUE) # Eigenvector centrality, the weights attribute is used by default
+  bc <- betweenness(g02, directed=TRUE) # Betweenness centrality
+  idc <- degree(g02, mode="in") # In degree centrality
+  odc <- degree(g02, mode="out") # outdegree centraliry
+  close <- closeness(g02, mode="all") # Closeness centrality
+  
+  cScores <- as.data.frame(cbind(ec$vector, bc, idc, odc, close))
+  return(list("graph" = g02, "Centrality" = cScores))
+  }
+
+#Get graph and centrality scores for each year
+c00 <- NetCentrality(getAirData(2000)) # roughly 12 minutes to run
+c01 <- NetCentrality(getAirData(2001)) # roughly 20 minutes to run
+c02 <- NetCentrality(getAirData(2002))
+c03 <- NetCentrality(getAirData(2003))
+c04 <- NetCentrality(getAirData(2004))
+c05 <- NetCentrality(getAirData(2005))
+c06 <- NetCentrality(getAirData(2006))
+c07 <- NetCentrality(getAirData(2007))
+c08 <- NetCentrality(getAirData(2008))
+c09 <- NetCentrality(getAirData(2009))
+c10 <- NetCentrality(getAirData(2010))
+
+c001 <- c00$Centrality
+c001$year <- 2000
+c011 <- c01$Centrality
+c011$year <- 2001
+c021 <- c02$Centrality
+c021$year <- 2002
+c031 <- c03$Centrality
+c031$year <- 2003
+c041 <- c04$Centrality
+c041$year <- 2004
+c051 <- c05$Centrality
+c051$year <- 2005
+c061 <- c06$Centrality
+c061$year <- 2006
+c071 <- c07$Centrality
+c071$year <- 2007
+c081 <- c08$Centrality
+c081$year <- 2008
+c091 <- c09$Centrality
+c091$year <- 2009
+c101 <- c10$Centrality
+c101$year <- 2010
+combined <- rbind(c001, c011, c021, c031, c041, c051, c061, c071, c081, c091, c101)
+combined$airport <- row.names(combined)
+rm("c001", "c011","c021", "c031", "c041", "c051", "c061", "c071", "c081", "c091", "c101")
 ```
 
 
